@@ -4,7 +4,7 @@ const { ShardingManager }=require('discord.js');
 const api = require('./api/server');
 const { startVerifier }=require('./services/shifts');
 
-if(!process.env.DISCORD_TOKEN||!process.env.DISCORD_CLIENT_ID){console.error('Missing DISCORD_TOKEN or DISCORD_CLIENT_ID.');process.exit(1);}
+if(process.env.BOT_DISABLED!=='true'&&(!process.env.DISCORD_TOKEN||!process.env.DISCORD_CLIENT_ID)){console.error('Missing DISCORD_TOKEN or DISCORD_CLIENT_ID.');process.exit(1);}
 
 const per=Math.max(1,Number(process.env.SHARD_GUILDS_PER_SHARD||10));
 let manager;
@@ -132,6 +132,13 @@ async function updateShardCount(){
 }
 
 (async()=>{
+  if(process.env.BOT_DISABLED==='true'){
+    global.__oxBotInfo={ok:false,guilds:0,members:0,shards:0,uptime:process.uptime(),updatedAt:new Date().toISOString(),shards:[]};
+    global.__oxManagerGuilds=0;
+    global.__oxManagerShardCount=0;
+    console.warn('BOT_DISABLED=true: Discord bot is offline; API and dashboard remain online.');
+    return;
+  }
   try{
     await spawnManager(1);
     setTimeout(updateShardCount,15000);
