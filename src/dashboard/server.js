@@ -355,6 +355,67 @@ function attachDashboard(app) {
     }
   });
 
+
+  app.get('/dashboard/api/guilds/:guildId/messages', requireSession, (req, res) => {
+    if (!dashboardGuild(req, res)) return;
+    const row = db.getGuildConfig(req.params.guildId);
+    let settings = {};
+    try { settings = JSON.parse(row.settings_json || '{}'); } catch {}
+    const messages = settings.messages || {};
+    res.json({
+      ok: true,
+      messages: {
+        welcome: { enabled: Boolean(messages.welcome?.enabled), channelId: messages.welcome?.channelId || '', content: String(messages.welcome?.content || 'Welcome to {server}, {user}!') },
+        leave: { enabled: Boolean(messages.leave?.enabled), channelId: messages.leave?.channelId || '', content: String(messages.leave?.content || '{user} has left the server.') },
+        moderationLogChannelId: messages.moderationLogChannelId || '',
+        commandLogChannelId: messages.commandLogChannelId || '',
+        joinLogChannelId: messages.joinLogChannelId || '',
+        ticketLogChannelId: messages.ticketLogChannelId || '',
+        applicationLogChannelId: messages.applicationLogChannelId || '',
+        suggestionLogChannelId: messages.suggestionLogChannelId || ''
+      },
+      updatedAt: row.updated_at
+    });
+  });
+
+  app.put('/dashboard/api/guilds/:guildId/messages', requireSession, (req, res) => {
+    if (!dashboardGuild(req, res)) return;
+    const incoming = req.body?.messages;
+    if (!incoming || typeof incoming !== 'object' || Array.isArray(incoming)) return res.status(400).json({ error: 'A valid messages configuration is required.' });
+    const validId = value => value == null || value === '' || /^\d{5,30}$/.test(String(value));
+    for (const key of ['welcome', 'leave']) {
+      const item = incoming[key];
+      if (!item || typeof item !== 'object') return res.status(400).json({ error: `Missing ${key} message configuration.` });
+      if (typeof item.enabled !== 'boolean') return res.status(400).json({ error: `Invalid ${key} enabled value.` });
+      if (!validId(item.channelId)) return res.status(400).json({ error: `Invalid ${key} channel ID.` });
+      if (String(item.content || '').length > 1000) return res.status(400).json({ error: `${key} message must be 1000 characters or fewer.` });
+      if (item.enabled && !item.channelId) return res.status(400).json({ error: `Choose a channel for the ${key} message.` });
+    }
+    const logKeys = ['moderationLogChannelId','commandLogChannelId','joinLogChannelId','ticketLogChannelId','applicationLogChannelId','suggestionLogChannelId'];
+    for (const key of logKeys) if (!validId(incoming[key])) return res.status(400).json({ error: `Invalid channel ID for ${key}.` });
+    const row = db.getGuildConfig(req.params.guildId);
+    let settings = {};
+    try { settings = JSON.parse(row.settings_json || '{}'); } catch {}
+    settings.messages = {
+      ...(settings.messages || {}),
+      welcome: { enabled: incoming.welcome.enabled, channelId: incoming.welcome.channelId || null, content: String(incoming.welcome.content || '').trim() || 'Welcome to {server}, {user}!' },
+      leave: { enabled: incoming.leave.enabled, channelId: incoming.leave.channelId || null, content: String(incoming.leave.content || '').trim() || '{user} has left the server.' },
+      ...Object.fromEntries(logKeys.map(key => [key, incoming[key] || null]))
+    };
+    db.setGuildConfig(req.params.guildId, { settings_json: JSON.stringify(settings) });
+    res.json({ ok: true });
+  });
+
+  app.get('/dashboard/api/guilds/:guildId/shifts', requireSession, (req, res) => {
+    if (!dashboardGuild(req, res)) return;
+    const shifts = db.listActiveShifts().filter(s => String(s.guild_id) === String(req.params.guildId));
+    res.json({ ok: true, shifts: shifts.map(s => ({
+      id: s.id, discordId: s.discord_id, robloxUserId: s.roblox_user_id,
+      startedAt: s.started_at, verifiedSeconds: s.verified_seconds || 0,
+      lastCheckAt: s.last_check_at, lastStatus: s.last_status || 'active'
+    })) });
+  });
+
   app.get('/dashboard/api/dev/overview', requireSession, (req, res) => {
     if (!owners().has(String(req.dashboardSession.user.id))) return res.status(403).json({ error: 'Developer access required.' });
     const info = global.__oxBotInfo || {};
