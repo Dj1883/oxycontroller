@@ -474,10 +474,20 @@ function attachDashboard(app) {
     res.json({ ok: true, suggestion: { id: updated.id, status: updated.status } });
   });
 
+  function requireDeveloper(req,res){if(!owners().has(String(req.dashboardSession?.user?.id||''))){res.status(403).json({error:'Developer access required.'});return false;}return true;}
+  function botFilesDirectory(){return path.resolve(process.env.BOT_FILES_DIR||path.join(process.cwd(),'data','bot-files'));}
+  function safeBotFileName(value){const name=String(value||'').trim();if(!name||name.length>120||name.startsWith('.')||name!==path.basename(name)||/[\\/\\0]/.test(name)||!/[A-Za-z0-9]/.test(name))return null;return name;}
+  app.get('/dashboard/api/dev/bot',requireSession,(req,res)=>{if(!requireDeveloper(req,res))return;res.json(global.__oxBotControl?.status?.()||{ok:true,online:Boolean(global.__oxBotInfo?.ok),disabled:!global.__oxBotInfo?.ok,shards:Number(global.__oxManagerShardCount||0)});});
+  app.post('/dashboard/api/dev/bot',requireSession,async(req,res)=>{if(!requireDeveloper(req,res))return;const action=String(req.body?.action||'');if(!['start','stop'].includes(action))return res.status(400).json({error:'Action must be start or stop.'});try{const control=global.__oxBotControl;if(!control)return res.status(503).json({error:'Bot controls are unavailable in this process.'});const status=action==='start'?await control.start():await control.stop();res.json({ok:true,...status});}catch(e){res.status(500).json({error:e.message||'Bot control failed.'});}});
+  app.get('/dashboard/api/dev/files',requireSession,async(req,res)=>{if(!requireDeveloper(req,res))return;try{const dir=botFilesDirectory();await fs.promises.mkdir(dir,{recursive:true});const entries=await fs.promises.readdir(dir,{withFileTypes:true});const files=[];for(const entry of entries){if(!entry.isFile())continue;const st=await fs.promises.stat(path.join(dir,entry.name));files.push({name:entry.name,size:st.size,modifiedAt:st.mtime.toISOString()});}files.sort((a,b)=>a.name.localeCompare(b.name));res.json({ok:true,files});}catch(e){res.status(500).json({error:'Unable to list bot files.'});}});
+  app.put('/dashboard/api/dev/files',requireSession,require('express').raw({type:'application/octet-stream',limit:'10mb'}),async(req,res)=>{if(!requireDeveloper(req,res))return;const name=safeBotFileName(req.query.name);if(!name)return res.status(400).json({error:'Invalid filename. Use a simple filename without folders or hidden-file prefixes.'});if(!Buffer.isBuffer(req.body)||req.body.length===0)return res.status(400).json({error:'Choose a non-empty file.'});try{const dir=botFilesDirectory();await fs.promises.mkdir(dir,{recursive:true});await fs.promises.writeFile(path.join(dir,name),req.body);res.json({ok:true,name,size:req.body.length});}catch(e){res.status(500).json({error:'Unable to save uploaded file.'});}});
+  app.delete('/dashboard/api/dev/files/:name',requireSession,async(req,res)=>{if(!requireDeveloper(req,res))return;const name=safeBotFileName(req.params.name);if(!name)return res.status(400).json({error:'Invalid filename.'});try{await fs.promises.unlink(path.join(botFilesDirectory(),name));res.json({ok:true,name});}catch(e){res.status(e.code==='ENOENT'?404:500).json({error:e.code==='ENOENT'?'File not found.':'Unable to delete file.'});}});
+
   app.get('/dashboard/api/dev/overview', requireSession, (req, res) => {
     if (!owners().has(String(req.dashboardSession.user.id))) return res.status(403).json({ error: 'Developer access required.' });
     const info = global.__oxBotInfo || {};
-    res.json({ ok: true, version: require('../../package.json').version, guilds: info.guilds || 0, members: info.members || 0, uptime: process.uptime() });
+    const bot = global.__oxBotControl?.status?.() || {online:Boolean(info.ok),disabled:!info.ok,shards:Number(global.__oxManagerShardCount||0)};
+    res.json({ ok: true, version: require('../../package.json').version, guilds: info.guilds || 0, members: info.members || 0, uptime: process.uptime(), bot });
   });
 
   setInterval(() => {
