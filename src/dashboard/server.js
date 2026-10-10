@@ -416,6 +416,64 @@ function attachDashboard(app) {
     })) });
   });
 
+
+  app.get('/dashboard/api/guilds/:guildId/tickets', requireSession, (req, res) => {
+    if (!dashboardGuild(req, res)) return;
+    const tickets = db.listOpenTickets(req.params.guildId, 50);
+    res.json({ ok: true, tickets: tickets.map(t => ({
+      id: t.id, userId: t.user_id, channelId: t.channel_id, status: t.status,
+      mode: t.mode, subject: t.subject || '', priority: t.priority || 'normal',
+      claimedBy: t.claimed_by || null, createdAt: t.created_at
+    })) });
+  });
+
+  app.get('/dashboard/api/guilds/:guildId/applications', requireSession, (req, res) => {
+    if (!dashboardGuild(req, res)) return;
+    const applications = db.getPendingApplications(req.params.guildId, 50);
+    res.json({ ok: true, applications: applications.map(a => ({
+      id: a.id, userId: a.user_id, robloxUsername: a.roblox_username || '',
+      department: a.department || '', formName: a.form_name || 'Application',
+      answers: (() => { try { return JSON.parse(a.answers_json || '{}'); } catch { return {}; } })(),
+      createdAt: a.created_at
+    })) });
+  });
+
+  app.put('/dashboard/api/guilds/:guildId/applications/:applicationId', requireSession, (req, res) => {
+    if (!dashboardGuild(req, res)) return;
+    const id = Number(req.params.applicationId);
+    const application = db.getApplication(id);
+    if (!application || String(application.guild_id) !== String(req.params.guildId)) return res.status(404).json({ error: 'Application not found for this server.' });
+    const status = String(req.body?.status || '');
+    if (!['approved', 'rejected'].includes(status)) return res.status(400).json({ error: 'Status must be approved or rejected.' });
+    const reason = String(req.body?.reason || '').trim().slice(0, 1000);
+    const updated = db.updateApplicationStatus(id, status, req.dashboardSession.user.id, reason);
+    res.json({ ok: true, application: { id: updated.id, status: updated.status } });
+  });
+
+  app.get('/dashboard/api/guilds/:guildId/suggestions', requireSession, (req, res) => {
+    if (!dashboardGuild(req, res)) return;
+    const suggestions = db.db.prepare('SELECT id,user_id,title,description,status,reviewer_id,review_reason,upvotes_json,downvotes_json,created_at,updated_at FROM suggestions WHERE guild_id=? ORDER BY created_at DESC LIMIT 50').all(String(req.params.guildId));
+    res.json({ ok: true, suggestions: suggestions.map(s => ({
+      id: s.id, userId: s.user_id, title: s.title, description: s.description,
+      status: s.status, reviewerId: s.reviewer_id, reviewReason: s.review_reason,
+      upvotes: (() => { try { return JSON.parse(s.upvotes_json || '[]').length; } catch { return 0; } })(),
+      downvotes: (() => { try { return JSON.parse(s.downvotes_json || '[]').length; } catch { return 0; } })(),
+      createdAt: s.created_at
+    })) });
+  });
+
+  app.put('/dashboard/api/guilds/:guildId/suggestions/:suggestionId', requireSession, (req, res) => {
+    if (!dashboardGuild(req, res)) return;
+    const id = Number(req.params.suggestionId);
+    const suggestion = db.getSuggestion(id);
+    if (!suggestion || String(suggestion.guild_id) !== String(req.params.guildId)) return res.status(404).json({ error: 'Suggestion not found for this server.' });
+    const status = String(req.body?.status || '');
+    if (!['approved', 'rejected', 'considered'].includes(status)) return res.status(400).json({ error: 'Invalid suggestion status.' });
+    const reason = String(req.body?.reason || '').trim().slice(0, 1000);
+    const updated = db.reviewSuggestion(id, status, req.dashboardSession.user.id, reason);
+    res.json({ ok: true, suggestion: { id: updated.id, status: updated.status } });
+  });
+
   app.get('/dashboard/api/dev/overview', requireSession, (req, res) => {
     if (!owners().has(String(req.dashboardSession.user.id))) return res.status(403).json({ error: 'Developer access required.' });
     const info = global.__oxBotInfo || {};
