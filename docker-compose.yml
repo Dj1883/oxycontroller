@@ -1,0 +1,26 @@
+services:
+  oxcontroller:
+    build: .
+    container_name: oxcontroller
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - "127.0.0.1:4000:4000"
+    volumes:
+      - ./data:/app/data
+      - ./config:/app/config
+    depends_on:
+      lavalink:
+        condition: service_started
+
+  lavalink:
+    image: ghcr.io/lavalink-devs/lavalink:4
+    container_name: oxcontroller-lavalink
+    restart: unless-stopped
+    environment:
+      _JAVA_OPTIONS: "-Xmx1G"
+    volumes:
+      - ./lavalink/application.yml:/opt/Lavalink/application.yml:ro
+    expose:
+      - "2333"

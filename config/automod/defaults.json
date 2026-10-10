@@ -1,0 +1,31 @@
+{
+  "enabled": true,
+  "deleteMessages": true,
+  "logActions": true,
+  "defaultAction": "delete_warn",
+  "modules": {
+    "words": true,
+    "spam": true,
+    "duplicate": true,
+    "mentions": true,
+    "links": true,
+    "invites": true,
+    "caps": true,
+    "emojis": true
+  },
+  "thresholds": {
+    "spamMessages": 6,
+    "spamWindowMs": 8000,
+    "duplicate": 3,
+    "mentions": 8,
+    "capsRatio": 0.75,
+    "capsMinimum": 12,
+    "emojis": 15
+  },
+  "escalation": {
+    "enabled": true,
+    "threshold": 3,
+    "action": "timeout",
+    "duration": 300
+  }
+}

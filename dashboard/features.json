@@ -1,0 +1,57 @@
+[
+  {
+    "id": "overview",
+    "label": "Overview",
+    "group": "server"
+  },
+  {
+    "id": "oxford",
+    "label": "Oxford Response",
+    "group": "server"
+  },
+  {
+    "id": "moderation",
+    "label": "Moderation",
+    "group": "server"
+  },
+  {
+    "id": "automod",
+    "label": "AutoMod",
+    "group": "server"
+  },
+  {
+    "id": "music",
+    "label": "Music",
+    "group": "server"
+  },
+  {
+    "id": "shifts",
+    "label": "Shifts",
+    "group": "server"
+  },
+  {
+    "id": "settings",
+    "label": "Settings",
+    "group": "server"
+  },
+  {
+    "id": "developer",
+    "label": "Developer",
+    "group": "developer"
+  },
+  {
+    "key": "tickets",
+    "name": "Tickets",
+    "status": "enabled"
+  },
+  {
+    "key": "applications",
+    "name": "Applications",
+    "status": "enabled"
+  },
+  {
+    "key": "website",
+    "name": "Website integration",
+    "status": "coming-soon"
+  }
+]

@@ -1,0 +1,1 @@
+const fs=require('node:fs');const path=require('node:path');function loadCommands(){const dir=path.join(__dirname,'commands');const out=new Map();for(const file of fs.readdirSync(dir).filter(f=>f.endsWith('.js'))){const c=require(path.join(dir,file));if(c.data?.name)out.set(c.data.name,c); }return out;}module.exports={loadCommands};
