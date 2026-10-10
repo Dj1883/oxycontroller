@@ -1,5 +1,6 @@
 require('dotenv').config();
 const path=require('node:path');
+const fs=require('node:fs/promises');
 const { ShardingManager }=require('discord.js');
 const api = require('./api/server');
 const { startVerifier }=require('./services/shifts');
@@ -131,28 +132,16 @@ async function updateShardCount(){
   finally{scaling=false;}
 }
 
-(async()=>{
-  if(process.env.BOT_DISABLED==='true'){
-    global.__oxBotInfo={ok:false,guilds:0,members:0,shards:0,uptime:process.uptime(),updatedAt:new Date().toISOString(),shards:[]};
-    global.__oxManagerGuilds=0;
-    global.__oxManagerShardCount=0;
-    console.warn('BOT_DISABLED=true: Discord bot is offline; API and dashboard remain online.');
-    return;
-  }
-  try{
-    await spawnManager(1);
-    setTimeout(updateShardCount,15000);
-
-    // Shard scaling remains frequent so the bot can react to guild changes.
-    setInterval(updateShardCount,Number(process.env.SHARD_SCALE_INTERVAL_MS||60000));
-
-    // Bot Info snapshot refreshes every 8 minutes for the dashboard.
-    setTimeout(() => collectBotInfo().catch(e => console.error('Initial bot info failed:', e.message)), 5000);
-    setInterval(() => collectBotInfo().catch(e => console.error('Bot info refresh failed:', e.message)), 8 * 60 * 1000);
-
-    startVerifier();
-  }catch(e){console.error(e);process.exit(1);}
-})();
+const botControlPath=path.resolve(__dirname,'../data/bot-control.json');
+let botLoopsStarted=false;
+function botStatus(){const online=Boolean(manager&&manager.shards&&manager.shards.size);return {ok:true,online,disabled:!online,shards:online?Number(global.__oxManagerShardCount||manager.shards.size):0,updatedAt:new Date().toISOString()};}
+async function saveBotDisabled(disabled){await fs.mkdir(path.dirname(botControlPath),{recursive:true});await fs.writeFile(botControlPath,JSON.stringify({disabled:Boolean(disabled),updatedAt:new Date().toISOString()},null,2),'utf8');}
+function startBotLoops(){if(botLoopsStarted)return;botLoopsStarted=true;setTimeout(updateShardCount,15000);setInterval(updateShardCount,Number(process.env.SHARD_SCALE_INTERVAL_MS||60000));setTimeout(()=>collectBotInfo().catch(e=>console.error('Initial bot info failed:',e.message)),5000);setInterval(()=>collectBotInfo().catch(e=>console.error('Bot info refresh failed:',e.message)),8*60*1000);startVerifier();}
+async function startBot(persist=true){if(manager&&manager.shards&&manager.shards.size)return botStatus();process.env.BOT_DISABLED='false';if(persist)await saveBotDisabled(false);try{await spawnManager(1);startBotLoops();console.log('Discord bot started from admin controls.');return botStatus();}catch(e){try{await stopManager();}catch{}process.env.BOT_DISABLED='true';if(persist)await saveBotDisabled(true);throw e;}}
+async function stopBot(persist=true){process.env.BOT_DISABLED='true';if(persist)await saveBotDisabled(true);await stopManager();global.__oxBotInfo={ok:false,guilds:0,members:0,shards:0,uptime:process.uptime(),updatedAt:new Date().toISOString(),shards:[]};global.__oxGuilds=[];global.__oxManagerGuilds=0;global.__oxManagerShardCount=0;console.warn('Discord bot stopped from admin controls; API remains online.');return botStatus();}
+global.__oxBotControl={status:botStatus,start:()=>startBot(true),stop:()=>stopBot(true)};
+async function persistedDisabled(){try{const saved=JSON.parse(await fs.readFile(botControlPath,'utf8'));if(typeof saved.disabled==='boolean')return saved.disabled;}catch{}return process.env.BOT_DISABLED==='true';}
+(async()=>{if(await persistedDisabled()){process.env.BOT_DISABLED='true';global.__oxBotInfo={ok:false,guilds:0,members:0,shards:0,uptime:process.uptime(),updatedAt:new Date().toISOString(),shards:[]};global.__oxGuilds=[];global.__oxManagerGuilds=0;global.__oxManagerShardCount=0;console.warn('BOT_DISABLED=true: Discord bot is offline; API and dashboard remain online.');return;}try{await startBot(false);}catch(e){console.error(e);process.exit(1);}})();
 
 process.on('SIGTERM',async()=>{console.log('SIGTERM received, shutting down.');try{await stopManager();await api.close();}finally{process.exit(0);}});
 process.on('SIGINT',async()=>{console.log('SIGINT received, shutting down.');try{await stopManager();await api.close();}finally{process.exit(0);}});
