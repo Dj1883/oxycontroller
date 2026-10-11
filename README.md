@@ -32,3 +32,8 @@ Private templates are owner-only. `/templates download <id>` verifies ownership,
 ## Per-server dashboard
 
 The dashboard at `/dashboard/` includes server-specific overview, Oxford Response live status/player views, moderation history, AutoMod configuration, and server settings. Discord OAuth permissions are checked on every per-server endpoint. See `dashboard/README.md`.
+
+
+## Music playback
+
+Music search is configured for Lavalink's native SoundCloud source. Enter a song/artist search or a public SoundCloud track/playlist URL in `/music`. This configuration does not require YouTube OAuth, Spotify credentials, or LavaSrc. Lavalink must be able to reach SoundCloud from the VPS. Playback availability can still vary by track, region, or SoundCloud restrictions.
